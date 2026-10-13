@@ -1,7 +1,7 @@
 {
 	"name": "sigrun-ext-codemode",
 	"version": "0.1.0",
-	"description": "Codemode extension for sigrun (pi-durable): the `codemode` tool — model-written JavaScript in a QuickJS sandbox, with MCP-server tools namespaced as script-callable tools",
+	"description": "Codemode extension for sigrun (pi-durable): the `codemode` tool \u2014 model-written JavaScript in a QuickJS sandbox, with MCP-server tools namespaced as script-callable tools",
 	"type": "module",
 	"engines": {
 		"node": ">=22.19.0"
@@ -35,5 +35,14 @@
 		"tsx": "^4.23.15",
 		"typescript": "^7.0.2",
 		"vitest": "^5.0.3"
-	}
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "github",
+		"url": "git+https://github.com/sigrun-ai/sigrun-ext-codemode.git"
+	},
+	"bugs": {
+		"url": "https://github.com/sigrun-ai/sigrun-ext-codemode/issues"
+	},
+	"homepage": "https://github.com/sigrun-ai/sigrun-ext-codemode#readme"
 }
