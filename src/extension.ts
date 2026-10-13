@@ -55,14 +55,19 @@ export const CODEMODE_NOT_OFFERED_NOTICE =
 	"via Settings → default tools";
 
 /**
- * The companion section render: the notice ONLY when the codemode tool is
- * installed (agent.callable holds it) yet not model-offered in this request
- * (`agent.tools` is the offered set); `undefined` otherwise (offered, or
- * not installed — nothing to warn about).
+ * The companion section render: the notice ONLY when the codemode tool
+ * is installed (one of the selected extensions registers it) yet not
+ * model-offered in this request (`agent.tools` is the offered set);
+ * `undefined` otherwise (offered, or not installed — nothing to warn
+ * about). Installation cannot be read from `agent.callable`: that set
+ * holds only tools-callable tools, and `codemode` registers with
+ * `callers: ["model"]`.
  */
 export function renderCodemodeNotice(input: PromptInput): string | undefined {
-	const installed = input.agent.callable.some(
-		(tool) => tool.name === CODEMODE_TOOL_NAME,
+	const installed = input.agent.extensions.some((extension) =>
+		(extension.tools ?? []).some(
+			(tool) => tool.name === CODEMODE_TOOL_NAME,
+		),
 	);
 	if (!installed) return undefined; // not installed: no lie to correct
 	const offered = input.agent.tools.some(
