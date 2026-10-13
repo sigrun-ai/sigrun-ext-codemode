@@ -79,6 +79,19 @@ Tools keep the `<server>/<tool>` shape rather than upstream pi's
 server with no renames. The same decision is recorded in
 sigrun-ext-mcp's README; the two must stay consistent.
 
+## Package replacement semantics (slice 4)
+
+Replace this package by not installing it and installing yours: the
+surface is one tool named exactly `codemode` (plus the companion
+`codemode_notice` section and the factory-time namespace snapshot), so a
+per-name replacement is trivial — uninstall ours, install the replacement
+under the same tool name. Do NOT co-install: pi-durable resolves
+cross-extension duplicate tool names last-selected-wins, so a co-installed
+replacement silently shadows the original. Sigrun's extension loader now
+makes the shadowing visible at boot (it `console.warn`s once per duplicate
+tool name, naming the extensions and the last-wins resolution), but the
+warning changes nothing: last-wins stands. Replace, don't co-install.
+
 ## Dependencies
 
 `quickjs-wasi` is a REAL dependency of this package, not a transitive
