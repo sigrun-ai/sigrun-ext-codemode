@@ -126,6 +126,7 @@ try {
 		await rm(dir, { recursive: true, force: true });
 	}
 } catch (error) {
+	process.exitCode = 1;
 	console.error(`canary: FAIL ${error?.stack ?? String(error)}`);
 } finally {
 	clearTimeout(timer);
