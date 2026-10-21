@@ -1,4 +1,4 @@
-# sigrun-ext-codemode
+# @sigrun/ext-codemode
 
 The codemode extension for sigrun (pi-durable): the `codemode` tool —
 model-written JavaScript run in a QuickJS sandbox, whose script survives
