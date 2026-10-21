@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-10-13
 ### Added
+- Renamed to `@sigrun/ext-codemode` for the 0.1.0 release (repo stays
+  `sigrun-ai/sigrun-ext-codemode`): published package metadata
+  (`publishConfig` access/provenance), host modules moved to
+  `peerDependencies` mirrored in `devDependencies` at exact `1.3.0`
+  (`quickjs-wasi` remains the one runtime dependency), and a manifest
+  hygiene check wired into `npm test`.
 - sigrun loader-contract wrapper over pi-durable's `createCodemodeExtension`:
   a `CodemodeSandbox` pinned `timeoutMs: 300_000` / `memoryLimitBytes: 256 MiB`
   at construction, MCP-config-driven namespaces (`SIGRUN_MCP_CONFIG` →
