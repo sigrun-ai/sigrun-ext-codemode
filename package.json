@@ -22,7 +22,7 @@
 		"test": "node scripts/check-manifest.mjs --expect-name @sigrun/ext-codemode && vitest run",
 		"typecheck": "tsc --noEmit",
 		"build": "tsc -p tsconfig.build.json",
-		"prepare": "npm run build"
+		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
 		"quickjs-wasi": "3.6.2"
