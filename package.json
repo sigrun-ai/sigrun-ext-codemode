@@ -1,6 +1,6 @@
 {
 	"name": "@sigrun/ext-codemode",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Codemode extension for sigrun (pi-durable): the `codemode` tool \u2014 model-written JavaScript in a QuickJS sandbox, with MCP-server tools namespaced as script-callable tools",
 	"type": "module",
 	"engines": {
