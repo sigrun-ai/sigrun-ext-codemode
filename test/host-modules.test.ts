@@ -1,7 +1,7 @@
 /**
  * Single-copy host-module contract (mirrors sigrun's
  * test/host-modules.test.ts): pi-codemode and pi-durable pin their
- * @earendil-works family exactly (1.3.0), and a nested second copy under
+ * @earendil-works family exactly (1.4.0), and a nested second copy under
  * node_modules is the silent identity-skew class sigrun's loader guard
  * exists to catch. Walks the installed tree directly — no `npm ls` shell-out:
  * the contract is what is on disk.
@@ -78,7 +78,7 @@ test("exactly one installed copy of each @earendil-works host module", async () 
 	}
 });
 
-test("the @earendil-works host modules are installed at 1.3.0", async () => {
+test("the @earendil-works host modules are installed at 1.4.0", async () => {
 	for (const moduleName of HOST_MODULES) {
 		const copies = await installedCopies(moduleName);
 		expect(copies.length, moduleName).toBeGreaterThan(0);
@@ -86,7 +86,7 @@ test("the @earendil-works host modules are installed at 1.3.0", async () => {
 			const pkg = JSON.parse(await readFile(manifest, "utf8")) as {
 				version: string;
 			};
-			expect(pkg.version, manifest).toBe("1.3.0");
+			expect(pkg.version, manifest).toBe("1.4.0");
 		}
 	}
 });

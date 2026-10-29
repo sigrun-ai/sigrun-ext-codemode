@@ -1,7 +1,7 @@
 {
 	"name": "@sigrun/ext-codemode",
 	"version": "0.1.2",
-	"description": "Codemode extension for sigrun (pi-durable): the `codemode` tool \u2014 model-written JavaScript in a QuickJS sandbox, with MCP-server tools namespaced as script-callable tools",
+	"description": "Codemode extension for sigrun (pi-durable): the `codemode` tool — model-written JavaScript in a QuickJS sandbox, with MCP-server tools namespaced as script-callable tools",
 	"type": "module",
 	"engines": {
 		"node": ">=22.19.0"
@@ -34,10 +34,10 @@
 		"@earendil-works/pi-durable": "1.3.0 || 1.4.0"
 	},
 	"devDependencies": {
-		"@earendil-works/chord": "1.3.0",
-		"@earendil-works/pi-ai": "1.3.0",
-		"@earendil-works/pi-codemode": "1.3.0",
-		"@earendil-works/pi-durable": "1.3.0",
+		"@earendil-works/chord": "1.4.0",
+		"@earendil-works/pi-ai": "1.4.0",
+		"@earendil-works/pi-codemode": "1.4.0",
+		"@earendil-works/pi-durable": "1.4.0",
 		"@types/node": "^26.6.4",
 		"tsx": "^4.23.15",
 		"typescript": "^7.0.2",
