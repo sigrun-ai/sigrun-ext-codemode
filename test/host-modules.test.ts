@@ -78,7 +78,7 @@ test("exactly one installed copy of each @earendil-works host module", async () 
 	}
 });
 
-test("the @earendil-works host modules are installed at 1.4.0", async () => {
+test("the @earendil-works host modules are installed at 1.5.0", async () => {
 	for (const moduleName of HOST_MODULES) {
 		const copies = await installedCopies(moduleName);
 		expect(copies.length, moduleName).toBeGreaterThan(0);
@@ -86,7 +86,7 @@ test("the @earendil-works host modules are installed at 1.4.0", async () => {
 			const pkg = JSON.parse(await readFile(manifest, "utf8")) as {
 				version: string;
 			};
-			expect(pkg.version, manifest).toBe("1.4.0");
+			expect(pkg.version, manifest).toBe("1.5.0");
 		}
 	}
 });
