@@ -393,7 +393,8 @@ test("details.calls and pi.live.nestedTools records appear", async () => {
 			expect(transcript).toContain('"name":"read"');
 			// pi.live.nestedTools: the live state showed the nested slot.
 			const nestedSlots = liveViewSnapshot.flat().filter(
-				(slot) => JSON.stringify(slot).includes('"read"'),
+				(slot) =>
+					(slot as { name?: string }).name === "read",
 			);
 			expect(nestedSlots.length).toBeGreaterThanOrEqual(1);
 		} finally {
