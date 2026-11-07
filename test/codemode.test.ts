@@ -18,7 +18,6 @@ import {
 	fauxAssistantMessage,
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
-import { watchEvents } from "@earendil-works/pi-durable";
 import {
 	cleanupDir,
 	closeOpened,
@@ -362,14 +361,20 @@ test("details.calls and pi.live.nestedTools records appear", async () => {
 			const root = await opened.harness.root(BACKGROUND_CONTEXT, {
 				agent: { model: opened.defaultModel },
 			});
-			const events: unknown[] = [];
-			const stream = await watchEvents(
-				opened.harness,
-				root.id,
-				BACKGROUND_CONTEXT,
-			);
-			stream.start(async (batch) => {
-				events.push(...batch);
+			// pi-durable 1.5.0 removed watchEvents (upstream #11327): the
+			// conversation view carries the live state — nested tool slots
+			// live at pi.live.nestedTools while a nested call runs.
+			const liveViewSnapshot: unknown[][] = [];
+			const liveViewCapture = (view: { docs?: Record<string, unknown> }): void => {
+				const live = view.docs?.["pi.live"] as
+					| { nestedTools?: unknown[] }
+					| undefined;
+				if (live !== undefined) liveViewSnapshot.push(live.nestedTools ?? []);
+			};
+			const watch = await root.watch(BACKGROUND_CONTEXT);
+			liveViewCapture(watch.value);
+			watch.start(async (call) => {
+				if (call.kind === "value") liveViewCapture(call.value);
 			});
 			try {
 				const submission = await root.submit(
@@ -379,21 +384,19 @@ test("details.calls and pi.live.nestedTools records appear", async () => {
 				await submission.wait(BACKGROUND_CONTEXT);
 				await root.waitForIdle(BACKGROUND_CONTEXT);
 			} finally {
-				await stream.stop().catch(() => undefined);
+				await watch.stop().catch(() => undefined);
 			}
 			const page = await root.entries({}, 50, undefined, BACKGROUND_CONTEXT);
 			const transcript = JSON.stringify(page.items);
 			// details.calls: the codemode result entry carries the nested call row.
 			expect(transcript).toContain('"calls"');
 			expect(transcript).toContain('"name":"read"');
-			// pi.live.nestedTools: the event stream shows the nested slot.
-			const nestedEvents = events.filter(
-				(event) =>
-					(event as { type: string; toolName?: string }).type ===
-						"tool_execution_start" &&
-					(event as { toolName?: string }).toolName === "read",
+			// pi.live.nestedTools: the live state showed the nested slot.
+			const nestedSlots = liveViewSnapshot.flat().filter(
+				(slot) =>
+					(slot as { name?: string }).name === "read",
 			);
-			expect(nestedEvents.length).toBeGreaterThanOrEqual(1);
+			expect(nestedSlots.length).toBeGreaterThanOrEqual(1);
 		} finally {
 			await closeOpened(opened);
 		}
