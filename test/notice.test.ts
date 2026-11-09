@@ -21,7 +21,6 @@ import {
 	openCodemodeHarness,
 	tempDir,
 } from "./harness.js";
-import { MCP_CONFIG_ENV } from "../src/config.js";
 import {
 	CODEMODE_NOTICE_SECTION_KEY,
 	CODEMODE_NOT_OFFERED_NOTICE,

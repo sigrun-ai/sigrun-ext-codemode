@@ -7,33 +7,28 @@ a restart — installed via upstream's
 sigrun's config and prompt additions.
 
 The sigrun extension-package contract: the default export is a factory
-taking no arguments, returning `{ extension }`.
+taking the sigrun host, returning `{ extension }` and lifecycle handlers.
 
 ## What the factory does
 
-1. Reads the MCP namespace snapshot ONCE from the same config
-   sigrun-ext-mcp reads: `SIGRUN_MCP_CONFIG` env override →
-   `~/.config/sigrun/mcp.json`. One `CodemodeNamespace` per enabled
-   server, `prefix: "<server>/"`. Absent file → empty namespaces (the
-   codemode tool + section still ship). A bad file warns at factory time
-   (best-effort) and installs un-namespaced rather than throwing — a bad
-   config must not cost the model its codemode tool.
+1. Creates one live MCP namespace array from sigrun-ext-mcp's
+   `mcp.servers` published hook. One `CodemodeNamespace` per enabled,
+   visible server, `prefix: "<server>/"`. The first call starts without
+   blocking the factory; committed settings writes and run settlement
+   refresh the same array in place. A failed hook call warns once per
+   failure status and preserves the last known namespaces.
 2. Builds the QuickJS sandbox (`CodemodeSandbox` from
    `@earendil-works/pi-codemode`) with pinned constructor options:
    `timeoutMs: 300_000`, `memoryLimitBytes: 256 MiB`.
 3. Wraps upstream's `createCodemodeExtension({ sandbox, namespaces })`
    with a companion `codemode_notice` section (below).
 
-Config fields read per server entry (the sigrun-ext-mcp shapes,
-duplicated here because that package is not npm-published): `enabled` /
-`disabled` (either false means off), `exposure`
-(`"codemode"` default | `"deferred"` | `"direct"` | `"hidden"`, plus the
-pi alias `"codemode-deferred"`), and `toolExposure` overrides. A server
-resolving fully `hidden` (server default `hidden` and every override
-`hidden`) is excluded from the snapshot — hidden tools never register,
+The hook supplies each server's resolved `enabled`, `exposure`, and
+`toolExposure` values. A fully `hidden` server (server default `hidden`
+and every override `hidden`) is excluded: hidden tools never register,
 so nothing scripts can call remains. Per-tool `hidden` resolution is
-sigrun-ext-mcp's job at registration time; this snapshot only groups by
-prefix, and hidden tools never reach `agent.callable` to be grouped.
+sigrun-ext-mcp's job at registration time; these namespaces only group
+by prefix, and hidden tools never reach `agent.callable` to be grouped.
 
 ### The deadline (verified against pi-codemode 1.2.0)
 
@@ -83,7 +78,7 @@ sigrun-ext-mcp's README; the two must stay consistent.
 
 Replace this package by not installing it and installing yours: the
 surface is one tool named exactly `codemode` (plus the companion
-`codemode_notice` section and the factory-time namespace snapshot), so a
+`codemode_notice` section and live MCP namespaces), so a
 per-name replacement is trivial — uninstall ours, install the replacement
 under the same tool name. Do NOT co-install: pi-durable resolves
 cross-extension duplicate tool names last-selected-wins, so a co-installed
