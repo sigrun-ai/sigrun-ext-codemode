@@ -3,8 +3,8 @@
  *
  * MCP namespaces come from ext-mcp's `mcp.servers` published hook. Codemode
  * loads before ext-mcp, so the factory starts (but never awaits) the first
- * refresh; the per-run lifecycle handler refreshes it again. Upstream reads
- * the namespaces array at section-render and script-execution time, so the
+ * refresh; committed settings writes and the per-run lifecycle refresh it
+ * again. Upstream reads the namespaces array at use time, so the
  * owned array is updated in place rather than replaced.
  *
  * `quickjs-wasi` is a direct dependency: pi-codemode's worker resolves its
@@ -24,6 +24,8 @@ export const CODEMODE_TIMEOUT_MS = 300_000;
 /** Pinned QuickJS heap cap (256 MiB; upstream default is unbounded). */
 export const CODEMODE_MEMORY_LIMIT_BYTES = 256 * 1024 * 1024;
 
+/** Mirrors ext-mcp's hook output (sigrun-ext-mcp/src/extension.ts,
+ * `createMcpServersHook`); core validates that schema at the boundary. */
 interface McpServer {
 	readonly name: string;
 	readonly enabled: boolean;
@@ -49,8 +51,10 @@ export interface CodemodeWiring {
 	readonly ready: Promise<void>;
 	/** Refresh before a newly created conversation's first run. */
 	readonly conversationCreated: NonNullable<SigrunExtensionResult["conversationCreated"]>;
-	/** Refresh after every settled run so the next run sees settings writes. */
+	/** Refresh after every settled run. */
 	readonly runSettled: NonNullable<SigrunExtensionResult["runSettled"]>;
+	/** Refresh immediately after any committed settings write. */
+	readonly onSettingsChanged: NonNullable<SigrunExtensionResult["onSettingsChanged"]>;
 	/** Abort in-flight executions and stop the worker machinery. */
 	close(): Promise<void>;
 }
@@ -63,19 +67,34 @@ export function createCodemodeWiring(host?: SigrunHost): CodemodeWiring {
 		memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
 	});
 	const extension = createSigrunCodemodeExtension({ sandbox, namespaces });
+	let failure: string | undefined;
 	const refreshNamespaces = async (): Promise<void> => {
 		if (host === undefined) return;
-		const result = await host.publishedHooks.call("mcp.servers", {});
-		if (result.status !== "ok") return;
-		const { servers } = result.value as { readonly servers: readonly McpServer[] };
-		const next = servers
-			.filter((server) => server.enabled && !fullyHidden(server))
-			.map((server) => ({
-				name: server.name,
-				description: `MCP server ${server.name} (tools ${server.name}/<tool>, registered by sigrun-ext-mcp)`,
-				prefix: `${server.name}/`,
-			}));
-		namespaces.splice(0, namespaces.length, ...next);
+		let problem: string | undefined;
+		try {
+			const result = await host.publishedHooks.call("mcp.servers", {});
+			if (result.status === "absent") {
+				// MCP is optional: an intentionally disabled provider is not a failure.
+			} else if (result.status !== "ok") {
+				problem = `status ${result.status}`;
+			} else {
+				const { servers } = result.value as { readonly servers: readonly McpServer[] };
+				const next = servers
+					.filter((server) => server.enabled && !fullyHidden(server))
+					.map((server) => ({
+						name: server.name,
+						description: `MCP server ${server.name} (tools ${server.name}/<tool>, registered by sigrun-ext-mcp)`,
+						prefix: `${server.name}/`,
+					}));
+				namespaces.splice(0, namespaces.length, ...next);
+			}
+		} catch (cause) {
+			problem = cause instanceof Error ? cause.message : String(cause);
+		}
+		if (problem !== undefined && problem !== failure) {
+			console.warn(`sigrun-ext-codemode: mcp.servers refresh failed: ${problem}`);
+		}
+		failure = problem;
 	};
 	return {
 		extension,
@@ -84,6 +103,7 @@ export function createCodemodeWiring(host?: SigrunHost): CodemodeWiring {
 		ready: refreshNamespaces(),
 		conversationCreated: refreshNamespaces,
 		runSettled: refreshNamespaces,
+		onSettingsChanged: refreshNamespaces,
 		close: () => sandbox.close(),
 	};
 }

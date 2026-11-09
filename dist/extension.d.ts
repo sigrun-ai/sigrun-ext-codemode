@@ -4,11 +4,10 @@
  * `callers: ["model"]`, plus the upstream `codemode` prompt section) with
  * our two sigrun additions:
  *
- * 1. The MCP namespace snapshot (src/config.ts): one `CodemodeNamespace`
- *    per configured MCP server, prefix `"<server>/"`, read once at factory
- *    time. The upstream section groups `agent.callable` tools by the
- *    longest matching prefix, so sigrun's `<server>/<tool>` MCP tools
- *    render grouped per server with no renames (the namespace ruler).
+ * 1. The live MCP namespaces: one `CodemodeNamespace` per configured MCP
+ *    server, prefix `"<server>/"`. The upstream section groups
+ *    `agent.callable` tools by the longest matching prefix, so sigrun's
+ *    `<server>/<tool>` MCP tools render grouped per server with no renames.
  *
  * 2. The warn-if-not-offered channel (the spec's corrected mechanism):
  *    when the extension is installed but the `codemode` TOOL is not
@@ -52,11 +51,11 @@ export declare const CODEMODE_NOT_OFFERED_NOTICE: string;
 export declare function renderCodemodeNotice(input: PromptInput): string | undefined;
 /**
  * The sigrun codemode extension: upstream's `codemode` extension (tool +
- * section, with our namespace snapshot) plus the companion notice section.
+ * section, with our live namespace array) plus the companion notice section.
  */
 export declare function createSigrunCodemodeExtension(options: {
     /** Runs the scripts: `CodemodeSandbox` on Node. */
     readonly sandbox: CodemodeSandboxBase;
-    /** The factory-time MCP namespace snapshot (src/config.ts). */
+    /** The live MCP namespace array; upstream reads it at use time. */
     readonly namespaces?: readonly CodemodeNamespace[];
 }): Extension;
