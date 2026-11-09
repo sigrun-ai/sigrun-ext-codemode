@@ -12,7 +12,17 @@
 
 import { expect, test } from "vitest";
 import { join } from "node:path";
-import { writeFile } from "node:fs/promises";
+import * as fs from "node:fs";
+import { vi } from "vitest";
+
+vi.mock("node:fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs")>();
+	return {
+		...actual,
+		readFileSync: vi.fn(actual.readFileSync),
+		existsSync: vi.fn(actual.existsSync),
+	};
+});
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
 	fauxAssistantMessage,
@@ -21,11 +31,11 @@ import {
 import {
 	cleanupDir,
 	closeOpened,
+	fakeHost,
 	openCodemodeHarness,
-	stubConfigPath,
+	server,
 	tempDir,
 } from "./harness.js";
-import { MCP_CONFIG_ENV } from "../src/config.js";
 
 /** Drive one model-issued codemode call and return the tool result entry. */
 async function driveCodemode(
@@ -135,29 +145,69 @@ test("the codemode tool is registered, model-offered, with the section and empty
 	}
 });
 
-test("a configured mcp.json yields one namespace per server, prefix `<server>/`", async () => {
+test("namespaces come from mcp.servers", async () => {
 	const dir = await tempDir("sigrun-codemode-ns-");
 	try {
-		await writeFile(
-			stubConfigPath(dir),
-			JSON.stringify({
-				servers: {
-					github: { command: "x", args: [] },
-					hiddenAll: { command: "x", args: [], exposure: "hidden" },
-					off: { command: "x", args: [], disabled: true },
-				},
-			}),
-			"utf8",
-		);
-		const opened = await openCodemodeHarness(dir);
+		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
+			server("acme"),
+			server("off", { enabled: false }),
+		]));
 		try {
 			expect(opened.wiring.namespaces).toEqual([
 				{
-					name: "github",
+					name: "acme",
 					description:
-						"MCP server github (tools github/<tool>, registered by sigrun-ext-mcp)",
-					prefix: "github/",
+						"MCP server acme (tools acme/<tool>, registered by sigrun-ext-mcp)",
+					prefix: "acme/",
 				},
+			]);
+		} finally {
+			await closeOpened(opened);
+		}
+	} finally {
+		await cleanupDir(dir);
+	}
+});
+
+test("no mcp.json is read", async () => {
+	const dir = await tempDir("sigrun-codemode-no-config-");
+	try {
+		const read = vi.mocked(fs.readFileSync);
+		const exists = vi.mocked(fs.existsSync);
+		read.mockClear();
+		exists.mockClear();
+		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
+			server("acme"),
+		]));
+		try {
+			const touched = [...read.mock.calls, ...exists.mock.calls]
+				.map(([path]) => String(path))
+				.filter((path) => path.endsWith("mcp.json"));
+			expect(touched).toEqual([]);
+			expect(opened.wiring.namespaces.map(({ name }) => name)).toEqual(["acme"]);
+		} finally {
+			await closeOpened(opened);
+		}
+	} finally {
+		await cleanupDir(dir);
+	}
+});
+
+test("a fully hidden server is excluded", async () => {
+	const dir = await tempDir("sigrun-codemode-hidden-");
+	try {
+		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
+			server("visible"),
+			server("hidden", { exposure: "hidden" }),
+			server("unhidden", {
+				exposure: "hidden",
+				toolExposure: { echo: "direct" },
+			}),
+		]));
+		try {
+			expect(opened.wiring.namespaces.map(({ name }) => name)).toEqual([
+				"visible",
+				"unhidden",
 			]);
 		} finally {
 			await closeOpened(opened);

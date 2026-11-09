@@ -25,12 +25,46 @@ import {
 	type ModelRef,
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { MCP_CONFIG_ENV } from "../src/config.js";
 import { createCodemodeWiring } from "../src/index.js";
+import type { SigrunHost } from "@sigrun/sigrun/extension";
 
-/** Configure the factory's config store via the env override. */
-export function stubConfigPath(dir: string): string {
-	return join(dir, "mcp.json");
+type Server = {
+	readonly name: string;
+	readonly enabled: boolean;
+	readonly exposure: "codemode" | "deferred" | "direct" | "hidden";
+	readonly toolExposure: Readonly<Record<string, "codemode" | "deferred" | "direct" | "hidden">>;
+};
+
+/** The hook's complete response shape, with only the boundary doubled. */
+export function fakeHost(servers: readonly Server[] = []): SigrunHost {
+	const host = {
+		publishedHooks: {
+			async call(name: string, payload: unknown) {
+				if (name !== "mcp.servers" || JSON.stringify(payload) !== "{}") {
+					return { status: "absent" } as const;
+				}
+				return {
+					status: "ok" as const,
+					provider: "sigrun-mcp",
+					value: { servers },
+				};
+			},
+		},
+	};
+	return host as unknown as SigrunHost;
+}
+
+export function server(
+	name: string,
+	overrides: Partial<Omit<Server, "name">> = {},
+): Server {
+	return {
+		name,
+		enabled: true,
+		exposure: "codemode",
+		toolExposure: {},
+		...overrides,
+	};
 }
 
 export interface OpenedHarness {
@@ -50,22 +84,13 @@ export async function openCodemodeHarness(
 	responses: Parameters<
 		ReturnType<typeof fauxProvider>["setResponses"]
 	>[0] = [fauxAssistantMessage("no tools needed")],
+	host: SigrunHost = fakeHost(),
 ): Promise<OpenedHarness> {
 	const workspace = join(dir, "workspace");
 	await mkdir(workspace, { recursive: true });
 	await writeFile(join(workspace, "note.txt"), "sigrun codemode says hi");
 
-	// The factory reads the config path from the env override at factory
-	// time (the snapshot), so the override must be set around the call.
-	const prior = process.env[MCP_CONFIG_ENV];
-	process.env[MCP_CONFIG_ENV] = stubConfigPath(dir);
-	let wiring: ReturnType<typeof createCodemodeWiring>;
-	try {
-		wiring = createCodemodeWiring();
-	} finally {
-		if (prior === undefined) delete process.env[MCP_CONFIG_ENV];
-		else process.env[MCP_CONFIG_ENV] = prior;
-	}
+	const wiring = createCodemodeWiring(host);
 
 	const faux = fauxProvider({
 		provider: "faux",
