@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.3] - 2026-11-07
 
+## [0.2.1] - 2026-11-09
+
+- CI: needs-core true (the settings rework added the `@sigrun/sigrun` file: dev dependency; the v0.2.0 tag's test job failed before publishing, so the version was never live).
+
 ## [0.2.0] - 2026-11-09
 
 ### Changed
