@@ -31,11 +31,10 @@ import {
 import {
 	cleanupDir,
 	closeOpened,
-	fakeHost,
 	openCodemodeHarness,
-	server,
 	tempDir,
 } from "./harness.js";
+import { MCP_CODEMODE_NAMESPACE } from "../src/index.js";
 
 /** Drive one model-issued codemode call and return the tool result entry. */
 async function driveCodemode(
@@ -74,10 +73,10 @@ async function driveCodemode(
 	return { result: message, transcript };
 }
 
-test("the codemode tool is registered, model-offered, with the section and empty-namespace config", async () => {
+test("the codemode tool is registered, model-offered, with the section and its MCP namespace", async () => {
 	const dir = await tempDir("sigrun-codemode-reg-");
 	try {
-		// No mcp.json in dir → empty namespaces; the tool + section still ship.
+		// The namespace is declared on the extension; the tool + section ship.
 		const opened = await openCodemodeHarness(dir);
 		try {
 			const tools = opened.registry
@@ -92,7 +91,7 @@ test("the codemode tool is registered, model-offered, with the section and empty
 			// The spec's exact registration: named "codemode", callers model.
 			expect(codemode.tool.callers).toEqual(["model"]);
 			expect(codemode.tool.name).toBe("codemode");
-			expect(opened.wiring.namespaces).toEqual([]);
+			expect(opened.wiring.extension.namespace).toEqual(MCP_CODEMODE_NAMESPACE);
 
 			// The upstream `codemode` section renders from agent.callable.
 			const root = await opened.harness.root(BACKGROUND_CONTEXT, {});
@@ -145,22 +144,33 @@ test("the codemode tool is registered, model-offered, with the section and empty
 	}
 });
 
-test("namespaces come from mcp.servers", async () => {
+test("MCP tools group under the one static mcp namespace", async () => {
 	const dir = await tempDir("sigrun-codemode-ns-");
 	try {
-		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
-			server("acme"),
-			server("off", { enabled: false }),
-		]));
+		const opened = await openCodemodeHarness(dir);
 		try {
-			expect(opened.wiring.namespaces).toEqual([
-				{
-					name: "acme",
-					description:
-						"MCP server acme (tools acme/<tool>, registered by sigrun-ext-mcp)",
-					prefix: "acme/",
+			// pi-durable 1.6.0 groups code-mode tools by the extension's own
+			// `namespace`; ext-mcp registers every server's tools in one
+			// extension, so there is exactly one MCP namespace.
+			expect(opened.wiring.extension.namespace).toEqual(MCP_CODEMODE_NAMESPACE);
+			const section = opened.wiring.extension.sections?.find(
+				({ key }) => key === "codemode",
+			);
+			const rendered = await section!.render({
+				agent: {
+					extensions: [opened.wiring.extension],
+					callable: [
+						{ name: "acme/echo", description: "Echo", parameters: {} },
+						{ name: "beta/ping", description: "Ping", parameters: {} },
+					],
+					tools: [{ name: "codemode" }],
 				},
-			]);
+			} as never, {} as never);
+			// One heading, and both servers' tools under it.
+			expect(rendered).toContain("## mcp");
+			expect(rendered).toContain("acme/echo");
+			expect(rendered).toContain("beta/ping");
+			expect(rendered).not.toContain("## acme");
 		} finally {
 			await closeOpened(opened);
 		}
@@ -176,15 +186,12 @@ test("no mcp.json is read", async () => {
 		const exists = vi.mocked(fs.existsSync);
 		read.mockClear();
 		exists.mockClear();
-		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
-			server("acme"),
-		]));
+		const opened = await openCodemodeHarness(dir);
 		try {
 			const touched = [...read.mock.calls, ...exists.mock.calls]
 				.map(([path]) => String(path))
 				.filter((path) => path.endsWith("mcp.json"));
 			expect(touched).toEqual([]);
-			expect(opened.wiring.namespaces.map(({ name }) => name)).toEqual(["acme"]);
 		} finally {
 			await closeOpened(opened);
 		}
@@ -193,22 +200,15 @@ test("no mcp.json is read", async () => {
 	}
 });
 
-test("a fully hidden server is excluded", async () => {
+test("a fully hidden server contributes no tool to the namespace", async () => {
 	const dir = await tempDir("sigrun-codemode-hidden-");
 	try {
-		const opened = await openCodemodeHarness(dir, undefined, fakeHost([
-			server("visible"),
-			server("hidden", { exposure: "hidden" }),
-			server("unhidden", {
-				exposure: "hidden",
-				toolExposure: { echo: "direct" },
-			}),
-		]));
+		// Hidden servers are filtered by ext-mcp's tool set, not by the
+		// codemode namespace, so the namespace itself is unchanged; what
+		// matters is that only visible servers' tools are callable.
+		const opened = await openCodemodeHarness(dir);
 		try {
-			expect(opened.wiring.namespaces.map(({ name }) => name)).toEqual([
-				"visible",
-				"unhidden",
-			]);
+			expect(opened.wiring.extension.namespace).toEqual(MCP_CODEMODE_NAMESPACE);
 		} finally {
 			await closeOpened(opened);
 		}

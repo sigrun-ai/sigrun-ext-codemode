@@ -26,47 +26,6 @@ import {
 } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { createCodemodeWiring } from "../src/index.js";
-import type { SigrunHost } from "@sigrun/sigrun/extension";
-
-type Server = {
-	readonly name: string;
-	readonly enabled: boolean;
-	readonly exposure: "codemode" | "deferred" | "direct" | "hidden";
-	readonly toolExposure: Readonly<Record<string, "codemode" | "deferred" | "direct" | "hidden">>;
-};
-
-/** The hook's complete response shape, with only the boundary doubled. */
-export function fakeHost(servers: readonly Server[] = []): SigrunHost {
-	const host = {
-		publishedHooks: {
-			async call(name: string, payload: unknown) {
-				if (name !== "mcp.servers" || JSON.stringify(payload) !== "{}") {
-					return { status: "absent" } as const;
-				}
-				return {
-					status: "ok" as const,
-					provider: "sigrun-mcp",
-					value: { servers },
-				};
-			},
-		},
-	};
-	return host as unknown as SigrunHost;
-}
-
-export function server(
-	name: string,
-	overrides: Partial<Omit<Server, "name">> = {},
-): Server {
-	return {
-		name,
-		enabled: true,
-		exposure: "codemode",
-		toolExposure: {},
-		...overrides,
-	};
-}
-
 export interface OpenedHarness {
 	readonly harness: Harness;
 	readonly defaultModel: ModelRef;
@@ -84,13 +43,12 @@ export async function openCodemodeHarness(
 	responses: Parameters<
 		ReturnType<typeof fauxProvider>["setResponses"]
 	>[0] = [fauxAssistantMessage("no tools needed")],
-	host: SigrunHost = fakeHost(),
 ): Promise<OpenedHarness> {
 	const workspace = join(dir, "workspace");
 	await mkdir(workspace, { recursive: true });
 	await writeFile(join(workspace, "note.txt"), "sigrun codemode says hi");
 
-	const wiring = createCodemodeWiring(host);
+	const wiring = createCodemodeWiring();
 
 	const faux = fauxProvider({
 		provider: "faux",

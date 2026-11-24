@@ -1,9 +1,9 @@
 /**
  * Single-copy host-module contract (mirrors sigrun's
  * test/host-modules.test.ts): pi-codemode and pi-durable pin their
- * @earendil-works family exactly (1.4.0), and a nested second copy under
- * node_modules is the silent identity-skew class sigrun's loader guard
- * exists to catch. Walks the installed tree directly — no `npm ls` shell-out:
+ * @earendil-works family exactly (see package.json), and a nested second
+ * copy under node_modules is the silent identity-skew class sigrun's
+ * loader guard exists to catch. Walks the installed tree directly — no `npm ls` shell-out:
  * the contract is what is on disk.
  */
 
@@ -78,15 +78,22 @@ test("exactly one installed copy of each @earendil-works host module", async () 
 	}
 });
 
-test("the @earendil-works host modules are installed at 1.5.0", async () => {
+test("the @earendil-works host modules are installed at the declared pin", async () => {
+	// Compare against package.json rather than a literal, so a deliberate
+	// bump does not leave this contract asserting the previous version.
+	const own = JSON.parse(
+		await readFile(join(REPO_ROOT, "package.json"), "utf8"),
+	) as { devDependencies: Record<string, string> };
 	for (const moduleName of HOST_MODULES) {
+		const declared = own.devDependencies[moduleName];
+		expect(declared, `${moduleName} is a pinned dev dependency`).toBeDefined();
 		const copies = await installedCopies(moduleName);
 		expect(copies.length, moduleName).toBeGreaterThan(0);
 		for (const manifest of copies) {
 			const pkg = JSON.parse(await readFile(manifest, "utf8")) as {
 				version: string;
 			};
-			expect(pkg.version, manifest).toBe("1.5.0");
+			expect(pkg.version, manifest).toBe(declared);
 		}
 	}
 });

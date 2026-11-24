@@ -1,152 +1,88 @@
-/** The published-hook namespace boundary: loading never blocks on the registry,
- * while the array passed upstream keeps its identity as settings change. */
+/**
+ * The code-mode namespace boundary: pi-durable 1.6.0 groups a code-mode
+ * tool by the `namespace` its OWN extension declares, so sigrun's MCP tools
+ * — all registered by ext-mcp's single extension — share one static
+ * namespace. These tests pin that contract and prove the section renders
+ * from it with no per-server list, no refresh hooks, and no mcp.json read.
+ */
 
-import { expect, test, vi } from "vitest";
-import { createCodemodeWiring } from "../src/index.js";
-import { createSigrunCodemodeExtension } from "../src/extension.js";
-import { fakeHost, server } from "./harness.js";
-import type { SigrunHost } from "@sigrun/sigrun/extension";
+import { expect, test } from "vitest";
+import { createCodemodeWiring, MCP_CODEMODE_NAMESPACE } from "../src/index.js";
 import type { CodemodeSandboxBase } from "@earendil-works/pi-codemode/portable";
 
-function sandbox(): CodemodeSandboxBase {
-	return {
-		async start() { throw new Error("not used by this test"); },
-		async close() {},
-	} as unknown as CodemodeSandboxBase;
+/** The upstream `codemode` section of this wiring's extension. */
+function codemodeSection(wiring: ReturnType<typeof createCodemodeWiring>) {
+	const section = wiring.extension.sections?.find(({ key }) => key === "codemode");
+	if (section === undefined) throw new Error("the codemode section is missing");
+	return section;
 }
 
-test("a standalone wiring without a host stays empty without rejecting", async () => {
-	const wiring = createCodemodeWiring(undefined as never);
+test("the extension declares exactly one static mcp namespace", async () => {
+	const wiring = createCodemodeWiring();
 	try {
-		await expect(wiring.ready).resolves.toBeUndefined();
-		expect(wiring.namespaces).toEqual([]);
+		expect(wiring.extension.namespace).toEqual(MCP_CODEMODE_NAMESPACE);
+		// Static: nothing in the wiring can rename it between runs, which is
+		// the property the old refresh machinery existed to provide.
+		expect(MCP_CODEMODE_NAMESPACE.name).toBe("mcp");
 	} finally {
 		await wiring.close();
 	}
 });
 
-test("namespaces fill after loading without blocking the factory", async () => {
-	let answer!: (value: unknown) => void;
-	const pending = new Promise((resolve) => { answer = resolve; });
-	const host = {
-		publishedHooks: { call: () => pending },
-	} as unknown as SigrunHost;
-	const wiring = createCodemodeWiring(host);
+test("several servers' tools render under the one heading", async () => {
+	const wiring = createCodemodeWiring();
 	try {
-		expect(wiring.namespaces).toEqual([]);
-		answer({
-			status: "ok",
-			provider: "sigrun-mcp",
-			value: { servers: [server("acme")] },
-		});
-		await wiring.ready;
-		expect(wiring.namespaces.map(({ name }) => name)).toEqual(["acme"]);
-	} finally {
-		await wiring.close();
-	}
-});
-
-test("a server added in MCP settings appears at the next run", async () => {
-	const servers = [server("acme")];
-	const wiring = createCodemodeWiring(fakeHost(servers));
-	try {
-		await wiring.ready;
-		expect(wiring.namespaces.map(({ name }) => name)).toEqual(["acme"]);
-		servers.push(server("beta"));
-		// A committed MCP settings write fans out to every extension.
-		await wiring.onSettingsChanged(["servers"], undefined);
-		expect(wiring.namespaces.map(({ name }) => name)).toEqual(["acme", "beta"]);
-		const section = wiring.extension.sections?.find(({ key }) => key === "codemode");
-		const rendered = await section!.render({
-			agent: { callable: [{ name: "beta/echo", description: "Echo", parameters: {} }] },
-		} as never, {} as never);
-		expect(rendered).toContain("## beta");
-	} finally {
-		await wiring.close();
-	}
-});
-
-test("runSettled refreshes namespaces for the next run", async () => {
-	const servers = [server("acme")];
-	const wiring = createCodemodeWiring(fakeHost(servers));
-	try {
-		await wiring.ready;
-		servers.push(server("beta"));
-		await wiring.runSettled({} as never, {} as never, {} as never);
-		expect(wiring.namespaces.map(({ name }) => name)).toEqual(["acme", "beta"]);
-	} finally {
-		await wiring.close();
-	}
-});
-
-test("an absent mcp.servers provider stays quiet", async () => {
-	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-	const host = {
-		publishedHooks: { call: async () => ({ status: "absent" as const }) },
-	} as unknown as SigrunHost;
-	const absentWiring = createCodemodeWiring(host);
-	try {
-		await absentWiring.ready;
-		await absentWiring.onSettingsChanged(["servers"], undefined);
-		expect(warn).not.toHaveBeenCalled();
-		expect(absentWiring.namespaces).toEqual([]);
-	} finally {
-		await absentWiring.close();
-		warn.mockRestore();
-	}
-});
-
-test("a rejected refresh resolves safely and warns once per failed status", async () => {
-	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-	try {
-		let fail = true;
-		const host = {
-			publishedHooks: {
-				async call() {
-					if (fail) throw new Error("registry unavailable");
-					return {
-						status: "ok" as const,
-						provider: "sigrun-mcp",
-						value: { servers: [server("acme")] },
-					};
+		const callable = [
+			{ name: "acme/echo", description: "Echo", parameters: {} },
+			{ name: "beta/ping", description: "Ping", parameters: {} },
+		];
+		const rendered = await codemodeSection(wiring).render(
+			{
+				agent: {
+					extensions: [wiring.extension],
+					callable,
+					tools: [{ name: "codemode" }],
 				},
-			},
-		} as unknown as SigrunHost;
-		const wiring = createCodemodeWiring(host);
-		try {
-			await expect(wiring.ready).resolves.toBeUndefined();
-			await wiring.onSettingsChanged(["servers"], undefined);
-			expect(warn).toHaveBeenCalledTimes(1);
-			expect(warn.mock.calls[0]?.[0]).toContain("registry unavailable");
-			fail = false;
-			await wiring.onSettingsChanged(["servers"], undefined);
-			expect(wiring.namespaces.map(({ name }) => name)).toEqual(["acme"]);
-			fail = true;
-			await wiring.onSettingsChanged(["servers"], undefined);
-			expect(warn).toHaveBeenCalledTimes(2);
-		} finally {
-			await wiring.close();
-		}
+			} as never,
+			{} as never,
+		);
+		expect(rendered).toContain("## mcp");
+		// Both tools, one heading: no per-server sections.
+		expect(rendered).toContain("acme/echo");
+		expect(rendered).toContain("beta/ping");
+		expect(rendered).not.toContain("## acme");
+		expect(rendered).not.toContain("## beta");
 	} finally {
-		warn.mockRestore();
+		await wiring.close();
 	}
 });
 
-test("upstream reads namespaces at use time", async () => {
-	const namespaces = [{
-		name: "acme",
-		description: "acme tools",
-		prefix: "acme/",
-	}];
-	const extension = createSigrunCodemodeExtension({ sandbox: sandbox(), namespaces });
-	const section = extension.sections?.find(({ key }) => key === "codemode");
-	expect(section).toBeDefined();
-	const input = {
-		agent: { callable: [{ name: "acme/echo", description: "Echo", parameters: {} }] },
-	};
-	const before = await section!.render(input as never, {} as never);
-	expect(before).toContain("## acme");
-	namespaces.pop();
-	const after = await section!.render(input as never, {} as never);
-	expect(after).not.toContain("## acme");
+test("the namespace lists with no tools yet, so the section is stable", async () => {
+	// A server still connecting has not registered its tools; the namespace
+	// heading must already be there, or the prompt would shift when it lands.
+	const wiring = createCodemodeWiring();
+	try {
+		const rendered = await codemodeSection(wiring).render(
+			{
+				agent: {
+					extensions: [wiring.extension],
+					callable: [],
+					tools: [{ name: "codemode" }],
+				},
+			} as never,
+			{} as never,
+		);
+		expect(rendered).toContain("## mcp");
+	} finally {
+		await wiring.close();
+	}
+});
+
+test("the wiring exposes no refresh surface: the namespace is static", () => {
+	const wiring = createCodemodeWiring();
+	const keys = Object.keys(wiring).sort();
+	expect(keys).toEqual(["close", "extension", "sandbox"]);
+	// The sandbox is what close() releases; a stub is enough to assert shape.
+	expect(typeof (wiring.sandbox as CodemodeSandboxBase)).toBe("object");
+	return wiring.close();
 });
