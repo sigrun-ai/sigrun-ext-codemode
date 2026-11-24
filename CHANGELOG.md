@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-24
+
+### Changed
+
+- pi-durable 1.6.0 and its per-extension code-mode namespace. The
+  `CodemodeNamespace` type and the `namespaces` option of
+  `createCodemodeExtension` are gone: a namespace now belongs to the
+  extension that brings the tools (`Extension.namespace`). ext-mcp registers
+  every server's tools in one extension, so all MCP tools group under a
+  single static `mcp` namespace, and each tool keeps its `<server>/<tool>`
+  name for provenance. The per-server refresh machinery (the `mcp.servers`
+  poll on load, run settle and settings change) existed only to keep the old
+  array current, and is removed with it.
+- `createCodemodeWiring` no longer takes a host and no longer returns
+  `namespaces`, `ready`, `conversationCreated`, `runSettled` or
+  `onSettingsChanged`: the namespace is static, so nothing needs refreshing.
+
 ## [0.1.4] - 2026-11-08
 
 - CI: grant actions: read to the release workflow (the release-test skip lookup). No code change.
